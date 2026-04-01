@@ -35,6 +35,11 @@ class AgentConfig:
     sr_timeout: int = 300
     seed: int = 42
     min_concept_occurrences: int = 2
+    enable_rgde: bool = False
+    rgde_k_range: list[int] = field(default_factory=lambda: [1, 2, 3])
+    rgde_scinet_epochs: int = 200
+    rgde_sr_niterations: int = 40
+    rgde_sr_maxsize: int = 25
 
 
 @dataclass
@@ -46,6 +51,7 @@ class EpochResult:
     constants_unified: int
     converged_envs: list[str]
     failed_envs: list[str]
+    extensions_found: list[str] = field(default_factory=list)
 
 
 def _evaluate_formula(expr: Expr, X: np.ndarray, y: np.ndarray, var_names: list[str]) -> FitMetrics:
@@ -245,6 +251,40 @@ class ATLASAgent:
                 logger.warning("Diagnostics failed for %s: %s", env_id, exc)
                 epoch_diagnostics[env_id] = []
 
+        # Step 4: Extend — RGDE on failed experiments (if enabled)
+        extensions_found = []
+        if self.config.enable_rgde:
+            for env_id in failed_envs:
+                ds = self.datasets.get(env_id)
+                if ds is None or len(ds) < 50:
+                    continue
+                best = self.formula_store.get_best(env_id)
+                best_r2 = best.fit.r_squared if best else -1.0
+                X = ds.knob_array()
+                y = ds.detector_array(ds.detector_names[0])
+                if y.ndim > 1:
+                    y = np.mean(y, axis=1)
+                try:
+                    from atlas.rgde.pipeline import run_rgde, RGDEConfig
+                    rgde_config = RGDEConfig(
+                        k_range=self.config.rgde_k_range,
+                        scinet_epochs=self.config.rgde_scinet_epochs,
+                        sr_niterations=self.config.rgde_sr_niterations,
+                        sr_maxsize=self.config.rgde_sr_maxsize,
+                    )
+                    rgde_result = run_rgde(X, y, ds.knob_names, r2_before=best_r2,
+                                           env_id=env_id, config=rgde_config)
+                    if rgde_result.success and rgde_result.dsl_type is not None:
+                        self.dsl_state.add_extension(
+                            name=rgde_result.dsl_type.name, ext_type="new_type",
+                            definition=rgde_result.dsl_type.to_dict(),
+                            trigger=f"RGDE on {env_id}, K={rgde_result.k_selected}")
+                        extensions_found.append(rgde_result.dsl_type.name)
+                except ImportError:
+                    logger.warning("RGDE unavailable (missing PyTorch or PySR)")
+                except Exception as e:
+                    logger.warning(f"RGDE failed for {env_id}: {e}")
+
         # Step 5: Unify constants
         all_constants: dict[str, float] = {}
         for env_id in self.env_ids:
@@ -270,6 +310,7 @@ class ATLASAgent:
             constants_unified=len(unified),
             converged_envs=converged_envs,
             failed_envs=failed_envs,
+            extensions_found=extensions_found,
         )
 
     def run(self) -> dict:
@@ -358,4 +399,5 @@ class ATLASAgent:
             "dsl_state": dsl_state_out,
             "fit_metrics": fit_metrics,
             "epochs_run": epochs_run,
+            "extensions": [e for e in self.dsl_state.extensions],
         }
