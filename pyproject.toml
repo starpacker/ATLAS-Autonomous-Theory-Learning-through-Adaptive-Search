@@ -1,0 +1,18 @@
+[project]
+name = "atlas"
+version = "0.1.0"
+description = "Autonomous Theory Learning through Adaptive Search"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
