@@ -536,8 +536,12 @@ class ATLASAgent:
                 best_r2 = best.fit.r_squared if best else -1.0
                 X = ds.knob_array()
                 y = ds.detector_array(ds.detector_names[0])
-                if y.ndim > 1:
-                    y = np.mean(y, axis=1)
+                # Pass full array output to RGDE — SciNet handles
+                # multi-output natively, and the pipeline expands
+                # position for decoder SR.  Only flatten truly-1D
+                # arrays that come back as (n, 1).
+                if y.ndim > 1 and y.shape[1] == 1:
+                    y = y.ravel()
                 try:
                     from atlas.rgde.pipeline import run_rgde, RGDEConfig
                     rgde_config = RGDEConfig(

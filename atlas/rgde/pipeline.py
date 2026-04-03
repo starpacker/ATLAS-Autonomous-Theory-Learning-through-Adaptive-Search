@@ -9,6 +9,9 @@ from atlas.rgde.constraint_finder import find_constraints
 from atlas.rgde.evaluator import evaluate_extension, EvaluationResult
 from atlas.types import FitMetrics
 
+# Maximum positions to subsample for decoder SR on array outputs.
+_MAX_DECODER_POSITIONS = 50
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -100,7 +103,30 @@ def run_rgde(X: np.ndarray, y: np.ndarray, var_names: list[str],
     try:
         from atlas.sr.pysr_wrapper import run_sr, SRConfig
         sr_config = SRConfig(niterations=config.sr_niterations, maxsize=config.sr_maxsize)
-        y_flat = y_f.ravel() if y_f.shape[1] == 1 else np.mean(y_f, axis=1)
+
+        if y_f.shape[1] == 1:
+            # Scalar output — flatten directly
+            y_flat = y_f.ravel()
+        else:
+            # Array output — expand with normalised position column so SR
+            # can discover spatial patterns like cos²(k·_position).
+            n_samples, n_positions = y_f.shape
+            if n_positions > _MAX_DECODER_POSITIONS:
+                rng = np.random.default_rng(42)
+                pos_idx = np.sort(rng.choice(n_positions,
+                                             _MAX_DECODER_POSITIONS,
+                                             replace=False))
+            else:
+                pos_idx = np.arange(n_positions)
+            n_pos = len(pos_idx)
+            norm_pos = pos_idx / max(n_positions - 1, 1)
+
+            decoder_X = np.repeat(decoder_X, n_pos, axis=0)
+            pos_col = np.tile(norm_pos, n_samples).reshape(-1, 1)
+            decoder_X = np.hstack([decoder_X, pos_col])
+            decoder_input_names = list(decoder_input_names) + ["_position"]
+            y_flat = y_f[:, pos_idx].ravel()
+
         sr_result = run_sr(decoder_X, y_flat, decoder_input_names, sr_config)
         if sr_result.best_formula is not None:
             decoder_formula = sr_result.best_formula

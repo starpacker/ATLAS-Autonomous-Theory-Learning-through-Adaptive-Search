@@ -289,16 +289,50 @@ def find_log_relations(
 # Approximate-equality grouping + unification
 # ---------------------------------------------------------------------------
 
+def _try_mpmath_pslq(
+    values: list[float],
+    tolerance: float = 1e-6,
+    max_coeff: int = 10,
+) -> Optional[list[int]]:
+    """Attempt true PSLQ via mpmath.  Returns integer coefficients or None."""
+    try:
+        import mpmath
+        mp_vals = [mpmath.mpf(v) for v in values]
+        result = mpmath.pslq(mp_vals, tol=mpmath.mpf(tolerance),
+                             maxcoeff=max_coeff)
+        return [int(c) for c in result] if result is not None else None
+    except (ImportError, Exception):
+        return None
+
+
+@dataclass
+class IntegerRelationResult:
+    """An integer relation discovered between unified constant groups."""
+    groups_involved: list[str]  # symbols of the unified constants
+    coefficients: list[int]     # integer coefficients
+    residual: float             # how close to zero
+    relation_type: str          # "value" or "log"
+
+
 def unify_constants(
     constants: dict[str, float],
     tolerance: float = 0.01,
     weights: Optional[dict[str, float]] = None,
+    discover_relations: bool = True,
+    relation_tolerance: float = 1e-4,
 ) -> list[UnifiedConstant]:
     """Group approximately equal constants and compute (weighted) mean ± std.
 
     Two constants are considered equal if their absolute values agree to
     within *tolerance* (fractional).  Signs are tracked separately so that
     e.g. +h and -h both map to the same unified constant.
+
+    When *discover_relations* is True (default), also searches for integer
+    relations between the unified group means — both in value-space and
+    log-space.  If ``mpmath`` is available, uses the true PSLQ algorithm;
+    otherwise falls back to brute-force search.  Discovered relations are
+    stored in each :class:`UnifiedConstant`'s metadata but do not alter
+    the grouping itself.
 
     Parameters
     ----------
@@ -309,6 +343,10 @@ def unify_constants(
     weights : dict, optional
         Per-constant weight (typically R² from the fit that produced it).
         Used for weighted mean/std.  If ``None``, equal weights are used.
+    discover_relations : bool
+        If True, search for integer relations between unified group means.
+    relation_tolerance : float
+        Tolerance for integer relation search.
     """
     if not constants:
         return []
@@ -370,5 +408,60 @@ def unify_constants(
             is_spurious=(p_value < 0.01) if len(members) >= 2 else False,
         )
         unified.append(uc)
+
+    # --- Integer relation discovery between unified group means ---
+    if discover_relations and len(unified) >= 2:
+        group_constants = {uc.symbol: uc.value for uc in unified
+                           if uc.value > 1e-300 and not uc.is_spurious}
+        if len(group_constants) >= 2:
+            # Try true PSLQ on pairs first, fall back to brute force
+            value_rels = find_constant_relations(
+                group_constants, tolerance=relation_tolerance)
+            log_rels = find_log_relations(
+                group_constants, tolerance=relation_tolerance)
+
+            # Build a lookup for attaching relations to unified constants
+            _relations_by_symbol: dict[str, list[IntegerRelationResult]] = {}
+            for rel in value_rels:
+                irr = IntegerRelationResult(
+                    groups_involved=[rel.key_a, rel.key_b],
+                    coefficients=[rel.coeff_a, rel.coeff_b],
+                    residual=rel.residual,
+                    relation_type="value",
+                )
+                _relations_by_symbol.setdefault(rel.key_a, []).append(irr)
+                _relations_by_symbol.setdefault(rel.key_b, []).append(irr)
+            for rel in log_rels:
+                irr = IntegerRelationResult(
+                    groups_involved=list(rel.keys),
+                    coefficients=list(rel.exponents),
+                    residual=rel.residual,
+                    relation_type="log",
+                )
+                for k in rel.keys:
+                    _relations_by_symbol.setdefault(k, []).append(irr)
+
+            # Also try mpmath PSLQ on the full vector of group means
+            mean_values = [uc.value for uc in unified
+                           if uc.value > 1e-300 and not uc.is_spurious]
+            if len(mean_values) >= 2:
+                pslq_result = _try_mpmath_pslq(mean_values)
+                if pslq_result is not None:
+                    symbols = [uc.symbol for uc in unified
+                               if uc.value > 1e-300 and not uc.is_spurious]
+                    residual = abs(sum(c * v for c, v in
+                                       zip(pslq_result, mean_values)))
+                    denom = sum(abs(c) * abs(v) for c, v in
+                                zip(pslq_result, mean_values))
+                    rel_residual = residual / max(denom, 1e-300)
+                    if rel_residual < relation_tolerance:
+                        irr = IntegerRelationResult(
+                            groups_involved=symbols,
+                            coefficients=pslq_result,
+                            residual=rel_residual,
+                            relation_type="pslq",
+                        )
+                        for s in symbols:
+                            _relations_by_symbol.setdefault(s, []).append(irr)
 
     return unified

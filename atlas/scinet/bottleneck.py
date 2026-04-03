@@ -20,6 +20,9 @@ def find_optimal_k(
     k_range: Sequence[int] = (1, 2, 3, 4),
     epochs_per_k: int = 100,
     n_seeds: int = 1,
+    encoder_hidden: Optional[List[int]] = None,
+    decoder_hidden: Optional[List[int]] = None,
+    train_config: Optional[object] = None,
 ) -> KSelectionResult:
     """Train SciNet for each bottleneck dimension and pick the best via AIC.
 
@@ -37,6 +40,12 @@ def find_optimal_k(
         Number of training epochs for each K.
     n_seeds:
         Number of random seeds to average over per K (best loss kept).
+    encoder_hidden:
+        Hidden layer sizes for the encoder.  If *None*, SciNet defaults apply.
+    decoder_hidden:
+        Hidden layer sizes for the decoder.  If *None*, SciNet defaults apply.
+    train_config:
+        Optional TrainConfig; overrides *epochs_per_k* when supplied.
 
     Returns
     -------
@@ -54,7 +63,7 @@ def find_optimal_k(
     losses: Dict[int, float] = {}
     best_models: Dict[int, object] = {}
 
-    config = TrainConfig(epochs=epochs_per_k)
+    config = train_config if train_config is not None else TrainConfig(epochs=epochs_per_k)
 
     for k in k_range:
         best_loss = float("inf")
@@ -62,7 +71,8 @@ def find_optimal_k(
 
         for seed in range(n_seeds):
             torch.manual_seed(seed)
-            model = SciNet(input_dim=input_dim, bottleneck_dim=k, output_dim=output_dim)
+            model = SciNet(input_dim=input_dim, bottleneck_dim=k, output_dim=output_dim,
+                           encoder_hidden=encoder_hidden, decoder_hidden=decoder_hidden)
             result = train_scinet(model, X, y, config)
             if result.final_loss < best_loss:
                 best_loss = result.final_loss
