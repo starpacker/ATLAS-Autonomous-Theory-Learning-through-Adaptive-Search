@@ -1,13 +1,13 @@
-"""Tests for ENV-03: Electron diffraction — de Broglie wavelength through a crystal."""
+"""Tests for ENV-03."""
 import numpy as np
 import pytest
-from atlas.environments.env_03_electron_diffraction import Env03ElectronDiffraction
+from atlas.environments.env_03 import Env03
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env03ElectronDiffraction()
+    return Env03()
 
 
 def _knobs(knob_0=0.5, knob_1=0.5, knob_2=0):
@@ -74,7 +74,7 @@ def test_output_range(env):
 # --- Diffraction structure ---
 
 def test_has_diffraction_peaks(env):
-    """Output should not be flat — Bragg peaks create structure."""
+    """Output should not be flat — peaks create structure."""
     result = env.run(_knobs())
     arr = result["detector_0"]
     # Nonzero std means structure exists
@@ -100,7 +100,7 @@ def test_deterministic(env):
 # --- Knob sensitivity ---
 
 def test_voltage_changes_pattern(env):
-    """Higher voltage => shorter de Broglie wavelength => different Bragg angles."""
+    """Higher voltage => different peak positions."""
     r1 = env.run(_knobs(knob_0=0.1))
     r2 = env.run(_knobs(knob_0=0.9))
     assert not np.allclose(r1["detector_0"], r2["detector_0"])

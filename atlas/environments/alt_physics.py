@@ -13,16 +13,18 @@ class PhysicsConfig:
     k_b_multiplier: float = 1.0
     e_multiplier: float = 1.0
     m_e_multiplier: float = 1.0
+    r_h_multiplier: float = 1.0  # ENV-06 spectral constant
 
 
 @contextlib.contextmanager
 def altered_physics(config: PhysicsConfig):
     """Context manager that temporarily modifies physics constants in all quantum environments."""
-    import atlas.environments.env_01_photoelectric as m01
-    import atlas.environments.env_02_compton as m02
-    import atlas.environments.env_03_electron_diffraction as m03
-    import atlas.environments.env_04_double_slit as m04
-    import atlas.environments.env_05_blackbody as m05
+    import atlas.environments.env_01 as m01
+    import atlas.environments.env_02 as m02
+    import atlas.environments.env_03 as m03
+    import atlas.environments.env_04 as m04
+    import atlas.environments.env_05 as m05
+    import atlas.environments.env_06 as m06
 
     # Modules that have _H
     h_modules = [m01, m02, m03, m04, m05]
@@ -59,12 +61,17 @@ def altered_physics(config: PhysicsConfig):
             originals[(id(mod), '_K_B')] = mod._K_B
             mod._K_B = mod._K_B * config.k_b_multiplier
 
-    # Update derived constants (COMPTON_WAVELENGTH depends on _H, _M_E, _C)
-    if hasattr(m02, '_COMPTON_WAVELENGTH'):
-        originals[(id(m02), '_COMPTON_WAVELENGTH')] = m02._COMPTON_WAVELENGTH
-        m02._COMPTON_WAVELENGTH = m02._H / (m02._M_E * m02._C)
+    # Save and modify _R_H (ENV-06 spectral constant)
+    if hasattr(m06, '_R_H'):
+        originals[(id(m06), '_R_H')] = m06._R_H
+        m06._R_H = m06._R_H * config.r_h_multiplier
 
-    all_mods = list({id(m): m for m in h_modules + [m01, m02, m03, m05]}.values())
+    # Update derived constant (_CHAR_LENGTH depends on _H, _M_E, _C)
+    if hasattr(m02, '_CHAR_LENGTH'):
+        originals[(id(m02), '_CHAR_LENGTH')] = m02._CHAR_LENGTH
+        m02._CHAR_LENGTH = m02._H / (m02._M_E * m02._C)
+
+    all_mods = list({id(m): m for m in h_modules + [m01, m02, m03, m05, m06]}.values())
 
     try:
         yield

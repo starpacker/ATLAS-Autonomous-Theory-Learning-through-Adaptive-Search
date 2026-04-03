@@ -1,4 +1,4 @@
-"""ENV-07: Stern-Gerlach spin-1/2 quantization."""
+"""ENV-07 experiment environment."""
 from __future__ import annotations
 
 import numpy as np
@@ -10,7 +10,7 @@ from atlas.types import KnobSpec, KnobType, DetectorSpec
 
 
 @register
-class Env07SternGerlach(BaseEnvironment):
+class Env07(BaseEnvironment):
 
     def __init__(self, seed: int | None = None):
         self._seed = seed
@@ -36,7 +36,6 @@ class Env07SternGerlach(BaseEnvironment):
         gradient = knobs["knob_1"]                         # field gradient [0, 1] normalized
         N = int(knobs["knob_2"])
 
-        # Quantum probability for spin-up: cos^2(theta/2)
         p_up = np.cos(theta / 2) ** 2
 
         rng = np.random.default_rng(self._seed)

@@ -1,13 +1,13 @@
-"""Tests for ENV-12: classical heat conduction (Fourier's law)."""
+"""Tests for ENV-12."""
 import math
 import pytest
-from atlas.environments.env_12_heat_conduction import Env12HeatConduction
+from atlas.environments.env_12 import Env12
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env12HeatConduction()
+    return Env12()
 
 
 def test_schema_structure(env):

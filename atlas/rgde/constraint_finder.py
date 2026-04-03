@@ -117,14 +117,15 @@ def find_constraints(Z: np.ndarray, max_degree: int = 2,
                                 constraint_type="inequality"))
 
     constraints.sort(key=lambda c: c.residual)
-    # Deduplicate
+    # Deduplicate — same terms AND same constraint_type are considered duplicates;
+    # different types (equality vs inequality) on the same terms are kept.
     filtered = []
-    seen: list[set] = []
+    seen: set[tuple] = set()
     for c in constraints:
-        ts = frozenset(c.terms)
-        if not any(ts == s for s in seen):
+        key = (frozenset(c.terms), c.constraint_type)
+        if key not in seen:
             filtered.append(c)
-            seen.append(ts)
+            seen.add(key)
     return filtered
 
 

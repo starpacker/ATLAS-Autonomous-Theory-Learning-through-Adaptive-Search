@@ -1,4 +1,4 @@
-"""D1/D2/D4 diagnostic tests for experiment data."""
+"""D1–D4 diagnostic tests for experiment data."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -79,7 +79,11 @@ def diagnose_discreteness(
     # scales naturally and avoids the fixed-fraction being too strict for
     # small sample counts (e.g. 2 clusters out of 10 samples).
     triggered = (n_clusters <= max_clusters) and (n_clusters <= np.sqrt(n))
-    confidence = 1.0 - (n_clusters / max(max_clusters, 1))
+    # Confidence: 1 cluster = maximally discrete (1.0), at the effective
+    # threshold = barely discrete (small but nonzero).  Use (n-1)/(max-1)
+    # so the boundary case (n_clusters == threshold) still yields > 0.
+    effective_threshold = max(min(max_clusters, int(np.sqrt(n))), 1)
+    confidence = 1.0 - (n_clusters - 1) / max(effective_threshold, 1)
 
     return DiagnosticResult(
         "D2",
@@ -146,16 +150,170 @@ def diagnose_residual_structure(
     )
 
 
+def diagnose_bottleneck_dimension(
+    dataset,
+    scinet_epochs: int = 50,
+    max_output_dim: int = 50,
+) -> DiagnosticResult:
+    """D3: Progressive bottleneck search — K_bottleneck > n_active_knobs.
+
+    Trains SciNet autoencoders with increasing bottleneck dimension K and
+    uses AIC to pick the best K.  If K_best > n_knobs the experiment has
+    hidden structure that raw symbolic regression cannot capture.  This is
+    the signal that triggers RGDE.
+
+    The finding "this system needs K>N latent dimensions" is itself
+    scientifically interesting — it means there are unobserved degrees of
+    freedom (no prior physics knowledge is injected).
+    """
+    try:
+        from atlas.scinet.bottleneck import find_optimal_k
+    except ImportError:
+        return DiagnosticResult("D3", False, 0.0,
+                                {"reason": "PyTorch not available"})
+
+    first_det = dataset.detector_names[0]
+    X = dataset.knob_array().astype(np.float32)
+    y = dataset.detector_array(first_det).astype(np.float32)
+
+    n_knobs = X.shape[1]
+    n_samples = X.shape[0]
+
+    if n_samples < 50:
+        return DiagnosticResult("D3", False, 0.0,
+                                {"reason": "too few samples",
+                                 "n_samples": n_samples})
+
+    # Subsample output positions for array detectors (speed)
+    if y.ndim > 1 and y.shape[1] > max_output_dim:
+        rng = np.random.default_rng(42)
+        indices = np.sort(rng.choice(y.shape[1], max_output_dim, replace=False))
+        y = y[:, indices]
+
+    if y.ndim == 1:
+        y = y.reshape(-1, 1)
+
+    # Test K from 1 up to n_knobs + 2, capped at 6 for speed
+    max_k = min(max(n_knobs + 2, 3), 6)
+    k_range = list(range(1, max_k + 1))
+
+    try:
+        result = find_optimal_k(X, y, k_range=k_range,
+                                epochs_per_k=scinet_epochs)
+    except Exception as exc:
+        return DiagnosticResult("D3", False, 0.0, {"error": str(exc)})
+
+    k_bottleneck = result.best_k
+    triggered = k_bottleneck > n_knobs
+
+    # Confidence: relative AIC improvement of K_best over K = n_knobs
+    confidence = 0.0
+    if triggered and n_knobs in result.aic_scores:
+        aic_n = result.aic_scores[n_knobs]
+        aic_best = result.aic_scores[k_bottleneck]
+        if abs(aic_n) > 1e-10:
+            confidence = min(1.0, max(0.0,
+                                      (aic_n - aic_best) / abs(aic_n)))
+
+    return DiagnosticResult(
+        "D3",
+        triggered,
+        confidence,
+        {
+            "k_bottleneck": k_bottleneck,
+            "n_knobs": n_knobs,
+            "aic_scores": {k: float(v) for k, v in result.aic_scores.items()},
+            "losses": {k: float(v) for k, v in result.losses.items()},
+        },
+    )
+
+
+def diagnose_cross_experiment_inconsistency(
+    env_id: str,
+    all_constants: dict[str, float],
+    group_tolerance: float = 0.01,
+    outlier_threshold: float = 0.05,
+) -> DiagnosticResult:
+    """D5: Detect constants that are inconsistent across experiments.
+
+    Groups constants from all experiments by value proximity (the same
+    grouping used by constant unification).  For each group that
+    includes a constant from *env_id*, checks whether that constant
+    deviates from the group mean by more than *outlier_threshold*
+    (relative).
+
+    A triggered D5 means this environment has a constant that *should*
+    match another experiment's constant but does not — useful for
+    flagging measurement artefacts or model mis-specification.
+    """
+    env_consts = {k: v for k, v in all_constants.items()
+                  if k.startswith(f"{env_id}:")}
+    other_consts = {k: v for k, v in all_constants.items()
+                    if not k.startswith(f"{env_id}:")}
+
+    if not env_consts or not other_consts:
+        return DiagnosticResult("D5", False, 0.0,
+                                {"reason": "insufficient cross-env data"})
+
+    inconsistencies: list[dict] = []
+
+    for ek, ev in env_consts.items():
+        abs_ev = abs(ev)
+        if abs_ev < 1e-10:
+            continue
+
+        # Find constants from other envs that should be the same
+        group_vals = [abs_ev]
+        group_keys = [ek]
+        for ok, ov in other_consts.items():
+            abs_ov = abs(ov)
+            if abs_ov < 1e-10:
+                continue
+            if abs(abs_ev - abs_ov) / max(abs_ev, abs_ov) < group_tolerance:
+                group_vals.append(abs_ov)
+                group_keys.append(ok)
+
+        if len(group_vals) < 2:
+            continue  # no cross-env match
+
+        mean_val = float(np.mean(group_vals))
+        if mean_val < 1e-10:
+            continue
+        deviation = abs(abs_ev - mean_val) / mean_val
+
+        if deviation > outlier_threshold:
+            inconsistencies.append({
+                "constant": ek,
+                "value": float(ev),
+                "group_mean": mean_val,
+                "deviation": deviation,
+                "group_size": len(group_vals),
+            })
+
+    triggered = len(inconsistencies) > 0
+    confidence = 0.0
+    if inconsistencies:
+        max_dev = max(d["deviation"] for d in inconsistencies)
+        confidence = min(1.0, max_dev / outlier_threshold)
+
+    return DiagnosticResult(
+        "D5", triggered, confidence,
+        {"n_inconsistencies": len(inconsistencies),
+         "details": inconsistencies[:5]},
+    )
+
+
 def run_all_diagnostics(
     dataset,
     best_r_squared: float,
     residuals: np.ndarray,
     repeated_outputs: Optional[list[np.ndarray]] = None,
 ) -> list[DiagnosticResult]:
-    """Run all available diagnostics (D1, D2, D4) and return results.
+    """Run per-environment diagnostics (D1–D4) and return results.
 
-    D3 (aliasing) and D5 (dimensional analysis) are deferred and not
-    implemented here.
+    D5 (cross-experiment inconsistency) requires all-env constants and
+    is computed post-hoc by the agent after constant unification.
+    A placeholder is included here; the agent replaces it.
     """
     results: list[DiagnosticResult] = []
 
@@ -173,8 +331,8 @@ def run_all_diagnostics(
     except Exception as exc:
         results.append(DiagnosticResult("D2", False, 0.0, {"error": str(exc)}))
 
-    # D3 deferred
-    results.append(DiagnosticResult("D3", False, 0.0, {"reason": "deferred"}))
+    # D3 — bottleneck dimension
+    results.append(diagnose_bottleneck_dimension(dataset))
 
     # D4 — residual structure
     results.append(diagnose_residual_structure(np.asarray(residuals)))

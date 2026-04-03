@@ -17,7 +17,7 @@ class DSLType:
     def mdl_cost(self) -> float:
         cost = 1.0
         for expr in self.encoding.values():
-            cost += expr.size()
+            cost += expr.mdl_cost()
         cost += len(self.constraints) * 3.0
         return cost
 

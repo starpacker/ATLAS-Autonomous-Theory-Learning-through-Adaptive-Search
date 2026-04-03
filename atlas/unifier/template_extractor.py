@@ -28,49 +28,44 @@ class TemplateResult:
     savings: float
 
 
-_hole_counter = 0
-
-
 def anti_unify(e1: Expr, e2: Expr) -> AntiUnifyResult:
     """Compute the most specific common generalization of two expressions.
 
     Where e1 and e2 agree structurally, the template keeps that structure.
     Where they differ, a fresh hole variable is introduced.
     """
-    global _hole_counter
-    _hole_counter = 0
     holes: dict[str, tuple[Expr, Expr]] = {}
-    template = _anti_unify_impl(e1, e2, holes)
+    counter = [0]  # mutable counter — no global state
+    template = _anti_unify_impl(e1, e2, holes, counter)
     return AntiUnifyResult(template=template, holes=holes)
 
 
 def _anti_unify_impl(e1: Expr, e2: Expr,
-                     holes: dict[str, tuple[Expr, Expr]]) -> Expr:
-    global _hole_counter
-
+                     holes: dict[str, tuple[Expr, Expr]],
+                     counter: list[int]) -> Expr:
     # If expressions are equal, return as-is
     if e1 == e2:
         return e1
 
     # Same node type and operator -> recurse
     if isinstance(e1, UnaryOp) and isinstance(e2, UnaryOp) and e1.op == e2.op:
-        sub = _anti_unify_impl(e1.operand, e2.operand, holes)
+        sub = _anti_unify_impl(e1.operand, e2.operand, holes, counter)
         return UnaryOp(e1.op, sub)
 
     if isinstance(e1, BinOp) and isinstance(e2, BinOp) and e1.op == e2.op:
-        left = _anti_unify_impl(e1.left, e2.left, holes)
-        right = _anti_unify_impl(e1.right, e2.right, holes)
+        left = _anti_unify_impl(e1.left, e2.left, holes, counter)
+        right = _anti_unify_impl(e1.right, e2.right, holes, counter)
         return BinOp(e1.op, left, right)
 
     if (isinstance(e1, NAryOp) and isinstance(e2, NAryOp) and
             e1.op == e2.op and len(e1.children) == len(e2.children)):
-        children = [_anti_unify_impl(c1, c2, holes)
+        children = [_anti_unify_impl(c1, c2, holes, counter)
                     for c1, c2 in zip(e1.children, e2.children)]
         return NAryOp(e1.op, children)
 
     # Different structure or values -> introduce a hole
-    hole_name = f"_HOLE_{_hole_counter}"
-    _hole_counter += 1
+    hole_name = f"_HOLE_{counter[0]}"
+    counter[0] += 1
     holes[hole_name] = (e1, e2)
     return Var(hole_name)
 

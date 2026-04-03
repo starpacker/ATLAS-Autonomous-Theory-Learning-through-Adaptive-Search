@@ -3,16 +3,16 @@
 Import all environment modules to trigger registration.
 """
 from atlas.environments import (  # noqa: F401
-    env_01_photoelectric,
-    env_02_compton,
-    env_03_electron_diffraction,
-    env_04_double_slit,
-    env_05_blackbody,
-    env_06_hydrogen_spectrum,
-    env_07_stern_gerlach,
-    env_08_water_wave,
-    env_09_elastic_collision,
-    env_10_spring,
-    env_11_freefall,
-    env_12_heat_conduction,
+    env_01,
+    env_02,
+    env_03,
+    env_04,
+    env_05,
+    env_06,
+    env_07,
+    env_08,
+    env_09,
+    env_10,
+    env_11,
+    env_12,
 )

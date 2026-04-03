@@ -171,9 +171,11 @@ def run_sr(
             continue
         formulas.append(expr)
         r2 = float(row.get("r2", -1.0))
+        mdl = float(expr.mdl_cost())
         if r2 > best_r_squared:
             best_r_squared = r2
             best_formula = expr
+            best_mdl = mdl
 
     converged = bool(getattr(model, "converged_", False))
 
@@ -309,7 +311,7 @@ class _Parser:
         base = self._unary()
         if self._peek() == "^":
             self._consume()
-            exponent = self._unary()  # right-associative: recurse via _unary
+            exponent = self._power()  # right-associative: recurse into _power
             return BinOp(Op.POW, base, exponent)
         return base
 

@@ -24,11 +24,30 @@ class FormulaStore:
     def get(self, env_id: str) -> list[StoredFormula]:
         return list(self._formulas.get(env_id, []))
 
-    def get_best(self, env_id: str) -> StoredFormula | None:
-        formulas = self.get(env_id)
-        if not formulas:
-            return None
-        return max(formulas, key=lambda f: f.fit.r_squared)
+    def get_best(self, env_id: str, r2_tolerance: float = 0.95) -> StoredFormula | None:
+        """Select the best formula balancing fit quality and simplicity.
+
+        Among Pareto-optimal formulas (R² vs MDL), pick the simplest one
+        whose R² is within *r2_tolerance* of the best available R².
+
+        This favours discovering concise physical laws rather than
+        over-fitting with complex expressions, while ensuring the
+        selected formula still fits well.
+        """
+        pareto = self.pareto_front(env_id)
+        if not pareto:
+            formulas = self.get(env_id)
+            if not formulas:
+                return None
+            return max(formulas, key=lambda f: f.fit.r_squared)
+        # Among Pareto-optimal, keep only those with R² close to the best
+        max_r2 = max(f.fit.r_squared for f in pareto)
+        threshold = max_r2 * r2_tolerance
+        candidates = [f for f in pareto if f.fit.r_squared >= threshold]
+        if not candidates:
+            candidates = pareto
+        # Among qualifying candidates, prefer lower MDL (simpler)
+        return min(candidates, key=lambda f: f.fit.mdl)
 
     def all_env_ids(self) -> set[str]:
         return set(self._formulas.keys())
@@ -37,7 +56,7 @@ class FormulaStore:
         constants: list[float] = []
         for formulas in self._formulas.values():
             for sf in formulas:
-                constants.extend(_extract_constants(sf.expr))
+                constants.extend(extract_constants(sf.expr))
         return constants
 
     def pareto_front(self, env_id: str) -> list[StoredFormula]:
@@ -56,18 +75,18 @@ class FormulaStore:
         return pareto
 
 
-def _extract_constants(expr: Expr) -> list[float]:
+def extract_constants(expr: Expr) -> list[float]:
     if isinstance(expr, Const):
         return [expr.value]
     if isinstance(expr, Var):
         return []
     if isinstance(expr, UnaryOp):
-        return _extract_constants(expr.operand)
+        return extract_constants(expr.operand)
     if isinstance(expr, BinOp):
-        return _extract_constants(expr.left) + _extract_constants(expr.right)
+        return extract_constants(expr.left) + extract_constants(expr.right)
     if isinstance(expr, NAryOp):
         result: list[float] = []
         for c in expr.children:
-            result.extend(_extract_constants(c))
+            result.extend(extract_constants(c))
         return result
     return []

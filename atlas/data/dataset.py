@@ -22,11 +22,22 @@ class ExperimentDataset:
         self._knobs.append(dict(knobs))
         self._detectors.append(dict(detectors))
 
+    def get_knobs(self, index: int) -> dict[str, float]:
+        """Return the knob settings for a specific sample by index."""
+        return dict(self._knobs[index])
+
+    def iter_knobs(self):
+        """Iterate over all knob settings (each as a dict)."""
+        for k in self._knobs:
+            yield dict(k)
+
     def knob_array(self) -> np.ndarray:
         return np.array([[k[name] for name in self.knob_names] for k in self._knobs])
 
     def detector_array(self, detector_name: str) -> np.ndarray:
         values = [d[detector_name] for d in self._detectors]
+        if not values:
+            return np.array([])
         if isinstance(values[0], np.ndarray):
             return np.stack(values)
         return np.array(values)

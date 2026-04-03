@@ -37,7 +37,16 @@ class RGDEResult:
 
 def run_rgde(X: np.ndarray, y: np.ndarray, var_names: list[str],
              r2_before: float, env_id: str,
-             config: RGDEConfig | None = None) -> RGDEResult:
+             config: RGDEConfig | None = None,
+             mdl_before: float | None = None) -> RGDEResult:
+    """Run the full RGDE pipeline (Steps 4a-4f).
+
+    Parameters
+    ----------
+    mdl_before:
+        Actual MDL of the best formula before extension.  If *None*, falls
+        back to a heuristic estimate (formula size or default).
+    """
     if config is None:
         config = RGDEConfig()
     try:
@@ -77,16 +86,22 @@ def run_rgde(X: np.ndarray, y: np.ndarray, var_names: list[str],
     # Step 4d: Build type
     dsl_type = build_type(env_id, encoder_result.formulas, constraints)
 
-    # Step 4e: SR on decoder (z -> y)
-    logger.info("RGDE Step 4e: SR on decoder")
+    # Step 4e: SR on decoder — use BOTH bottleneck Z and original knobs X.
+    # The original knobs serve as "question parameters" that are not part
+    # of the encoded state but still affect the output.  PySR will
+    # naturally select which variables are informative.
+    logger.info("RGDE Step 4e: SR on decoder (z + knobs → y)")
     z_var_names = [f"z_{k}" for k in range(K)]
+    decoder_input_names = z_var_names + list(var_names)
+    decoder_X = np.hstack([Z, X])  # (n_samples, K + n_knobs)
+
     decoder_formula = None
     r2_after = -1.0
     try:
         from atlas.sr.pysr_wrapper import run_sr, SRConfig
         sr_config = SRConfig(niterations=config.sr_niterations, maxsize=config.sr_maxsize)
         y_flat = y_f.ravel() if y_f.shape[1] == 1 else np.mean(y_f, axis=1)
-        sr_result = run_sr(Z, y_flat, z_var_names, sr_config)
+        sr_result = run_sr(decoder_X, y_flat, decoder_input_names, sr_config)
         if sr_result.best_formula is not None:
             decoder_formula = sr_result.best_formula
             r2_after = sr_result.best_r_squared
@@ -95,12 +110,12 @@ def run_rgde(X: np.ndarray, y: np.ndarray, var_names: list[str],
     except Exception as e:
         logger.warning(f"Decoder SR failed: {e}")
 
-    # Step 4f: Pareto evaluation
-    mdl_before = 10.0
-    mdl_after = decoder_formula.size() if decoder_formula else float("inf")
+    # Step 4f: Pareto evaluation — use actual MDL when available
+    effective_mdl_before = mdl_before if mdl_before is not None else max(X.shape[1] * 2.0, 5.0)
+    mdl_after_val = decoder_formula.mdl_cost() if decoder_formula else float("inf")
     type_cost = dsl_type.mdl_cost()
     evaluation = evaluate_extension(r2_before=r2_before, r2_after=r2_after,
-                                     mdl_before=mdl_before, mdl_after=mdl_after,
+                                     mdl_before=effective_mdl_before, mdl_after=mdl_after_val,
                                      type_mdl_cost=type_cost, min_r2_improvement=config.min_r2_improvement)
     success = evaluation.accepted and decoder_formula is not None
     return RGDEResult(success=success, dsl_type=dsl_type if success else None,

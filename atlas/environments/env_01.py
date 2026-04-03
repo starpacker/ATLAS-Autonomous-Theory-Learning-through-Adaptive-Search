@@ -1,4 +1,4 @@
-"""ENV-01: Photoelectric effect (scalar current output)."""
+"""ENV-01 experiment environment."""
 from __future__ import annotations
 
 import numpy as np
@@ -8,18 +8,18 @@ from atlas.environments.normalizer import denormalize
 from atlas.environments.registry import register
 from atlas.types import KnobSpec, KnobType, DetectorSpec
 
-# Physical constants — private, never exposed through interface
-_H = 6.626e-34          # Planck's constant (J·s)
-_E = 1.602e-19          # Elementary charge (C)
-_WORK_FUNCTIONS = [2.3, 4.1, 4.7, 5.1]  # eV, indexed by material type
-_FREQ_MIN = 1e14        # Hz
-_FREQ_MAX = 3e15        # Hz
-_VOLTAGE_MIN = -5.0     # V
-_VOLTAGE_MAX = 5.0      # V
+# Internal constants — private, never exposed through interface
+_H = 6.626e-34
+_E = 1.602e-19
+_WORK_FUNCTIONS = [2.3, 4.1, 4.7, 5.1]
+_FREQ_MIN = 1e14
+_FREQ_MAX = 3e15
+_VOLTAGE_MIN = -5.0
+_VOLTAGE_MAX = 5.0
 
 
 @register
-class Env01Photoelectric(BaseEnvironment):
+class Env01(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -49,17 +49,17 @@ class Env01Photoelectric(BaseEnvironment):
         voltage = denormalize(knobs["knob_3"], _VOLTAGE_MIN, _VOLTAGE_MAX,
                               target_min=-1.0, target_max=1.0)
 
-        photon_energy = _H * freq
-        W = _WORK_FUNCTIONS[material] * _E
-        E_max = photon_energy - W
+        e_in = _H * freq
+        threshold = _WORK_FUNCTIONS[material] * _E
+        surplus = e_in - threshold
 
-        if E_max <= 0:
+        if surplus <= 0:
             return {"detector_0": 0.0}
 
-        effective_energy = E_max + _E * voltage
-        if effective_energy <= 0:
+        effective = surplus + _E * voltage
+        if effective <= 0:
             return {"detector_0": 0.0}
 
-        current = intensity * (effective_energy / (_H * _FREQ_MAX))
-        current = float(np.clip(current, 0.0, 1.0))
-        return {"detector_0": current}
+        output = intensity * (effective / (_H * _FREQ_MAX))
+        output = float(np.clip(output, 0.0, 1.0))
+        return {"detector_0": output}

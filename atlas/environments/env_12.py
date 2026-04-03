@@ -1,4 +1,4 @@
-"""ENV-12: Classical heat conduction (Fourier's law)."""
+"""ENV-12 experiment environment."""
 from __future__ import annotations
 
 from atlas.environments.base import BaseEnvironment
@@ -8,7 +8,7 @@ from atlas.types import KnobSpec, KnobType, DetectorSpec
 
 
 @register
-class Env12HeatConduction(BaseEnvironment):
+class Env12(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -34,7 +34,6 @@ class Env12HeatConduction(BaseEnvironment):
 
         k = 50.0  # fixed thermal conductivity (e.g., steel) W/(m·K)
 
-        # Fourier's law: Q = k * A * dT / L
         Q = k * A * dT / L
 
         # Normalize: max Q at dT=100, A=0.1, L=0.01 => Q_max = 50*0.1*100/0.01 = 50000 W

@@ -1,13 +1,13 @@
-"""Tests for ENV-11: classical freefall."""
+"""Tests for ENV-11."""
 import math
 import pytest
-from atlas.environments.env_11_freefall import Env11Freefall
+from atlas.environments.env_11 import Env11
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env11Freefall()
+    return Env11()
 
 
 def test_schema_structure(env):

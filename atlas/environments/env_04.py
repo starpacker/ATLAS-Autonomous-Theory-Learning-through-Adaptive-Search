@@ -1,4 +1,4 @@
-"""ENV-04: Double-slit interference with wave-particle duality."""
+"""ENV-04 experiment environment."""
 from __future__ import annotations
 
 import numpy as np
@@ -8,13 +8,13 @@ from atlas.environments.normalizer import denormalize
 from atlas.environments.registry import register
 from atlas.types import KnobSpec, KnobType, DetectorSpec
 
-# Physical constants — private, never exposed through interface
-_H = 6.626e-34   # Planck's constant (J·s)
-_L = 1.0         # Fixed screen distance (m)
+# Internal constants — private, never exposed through interface
+_H = 6.626e-34
+_L = 1.0
 
 
 @register
-class Env04DoubleSlit(BaseEnvironment):
+class Env04(BaseEnvironment):
 
     def __init__(self, seed: int | None = None):
         self._seed = seed
@@ -63,7 +63,7 @@ class Env04DoubleSlit(BaseEnvironment):
             else:
                 output = intensity
         else:
-            # Low intensity: discrete photon/particle hits via multinomial sampling
+            # Low intensity: discrete sampling
             total = np.sum(intensity)
             if total > 0:
                 prob = intensity / total

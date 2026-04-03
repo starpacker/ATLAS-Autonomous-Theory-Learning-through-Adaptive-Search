@@ -1,7 +1,9 @@
 """Tests for experiment-centric verification with global MDL."""
 import numpy as np
+import pytest
 from atlas.multi_agent.verifier import (
     VerificationResult, compute_global_mdl_delta, is_statistically_significant,
+    verify_proposal_sr,
 )
 
 
@@ -57,3 +59,61 @@ def test_noisy_but_net_positive():
     result = compute_global_mdl_delta(per_env_deltas)
     # Most experiments benefit -> net negative MDL
     assert result.delta_total_mdl < 0
+
+
+# ── SR-based verification ──────────────────────────────────────────────────
+
+def test_verify_proposal_sr_no_pysr():
+    """Without PySR installed, verify_proposal_sr returns None gracefully."""
+    X = np.random.default_rng(42).normal(size=(50, 2))
+    y = X[:, 0] + X[:, 1]
+    try:
+        result = verify_proposal_sr(
+            X, y, X, y, var_names=["x0", "x1"],
+            n_seeds=1, sr_niterations=5,
+        )
+        # If PySR IS installed, result should be a dict with expected keys
+        if result is not None:
+            assert "mu" in result
+            assert "sigma" in result
+            assert "n_seeds" in result
+            assert result["method"] == "sr"
+    except ImportError:
+        pytest.skip("PySR not available")
+
+
+def test_verify_proposal_sr_with_concepts():
+    """SR-based verification with concept columns should return valid delta."""
+    rng = np.random.default_rng(42)
+    X_train = rng.uniform(0, 1, size=(50, 2))
+    X_test = rng.uniform(0, 1, size=(20, 2))
+    # True relation: y = x0 + cos(x0)^2
+    y_train = X_train[:, 0] + np.cos(X_train[:, 0]) ** 2
+    y_test = X_test[:, 0] + np.cos(X_test[:, 0]) ** 2
+    # Concept column that should help: cos(x0)^2
+    concept_train = {"cos2_x0": np.cos(X_train[:, 0]) ** 2}
+    concept_test = {"cos2_x0": np.cos(X_test[:, 0]) ** 2}
+    try:
+        result = verify_proposal_sr(
+            X_train, y_train, X_test, y_test,
+            var_names=["x0", "x1"],
+            concept_columns=concept_train,
+            concept_columns_test=concept_test,
+            n_seeds=1, sr_niterations=5,
+        )
+        if result is not None:
+            assert "mu" in result
+            assert "sigma" in result
+    except ImportError:
+        pytest.skip("PySR not available")
+
+
+def test_global_mdl_with_mixed_methods():
+    """compute_global_mdl_delta works fine with extra keys like 'method'."""
+    per_env_deltas = {
+        "ENV_01": {"mu": -5.0, "sigma": 1.0, "method": "sr"},
+        "ENV_02": {"mu": -3.0, "sigma": 0.5, "method": "estimate"},
+    }
+    result = compute_global_mdl_delta(per_env_deltas)
+    assert result.delta_total_mdl == -8.0
+    assert result.should_adopt

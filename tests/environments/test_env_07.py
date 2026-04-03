@@ -1,13 +1,13 @@
-"""Tests for ENV-07: Stern-Gerlach spin-1/2 quantization."""
+"""Tests for ENV-07."""
 import numpy as np
 import pytest
-from atlas.environments.env_07_stern_gerlach import Env07SternGerlach
+from atlas.environments.env_07 import Env07
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env07SternGerlach(seed=42)
+    return Env07(seed=42)
 
 
 def _knobs(knob_0=0.5, knob_1=0.5, knob_2=10_000):
@@ -85,8 +85,8 @@ def test_has_two_distinct_peaks(env):
 
 def test_peak_separation_varies_with_gradient():
     """Larger gradient should spread the two peaks farther apart."""
-    env_lo = Env07SternGerlach(seed=0)
-    env_hi = Env07SternGerlach(seed=0)
+    env_lo = Env07(seed=0)
+    env_hi = Env07(seed=0)
 
     arr_lo = env_lo.run(_knobs(knob_1=0.2, knob_2=100_000))["detector_0"]
     arr_hi = env_hi.run(_knobs(knob_1=0.9, knob_2=100_000))["detector_0"]
@@ -106,9 +106,9 @@ def test_peak_separation_varies_with_gradient():
 
 # --- Quantum probability ---
 
-def test_spin_up_probability_theta_zero():
+def test_up_probability_theta_zero():
     """theta=0 means knob_0=0; all particles should go up."""
-    env = Env07SternGerlach(seed=0)
+    env = Env07(seed=0)
     result = env.run(_knobs(knob_0=0.0, knob_1=0.5, knob_2=10_000))
     arr = result["detector_0"]
     # With theta=0, p_up=1 => all particles deflect up (center+deflection region)
@@ -119,7 +119,7 @@ def test_spin_up_probability_theta_zero():
 
 def test_spin_down_probability_theta_pi():
     """theta=pi means knob_0=1; all particles should go down."""
-    env = Env07SternGerlach(seed=0)
+    env = Env07(seed=0)
     result = env.run(_knobs(knob_0=1.0, knob_1=0.5, knob_2=10_000))
     arr = result["detector_0"]
     upper_half = np.sum(arr[100:])
@@ -131,15 +131,15 @@ def test_spin_down_probability_theta_pi():
 
 def test_stochastic_different_seeds():
     knobs = _knobs(knob_2=1000)
-    r1 = Env07SternGerlach(seed=1).run(knobs)
-    r2 = Env07SternGerlach(seed=2).run(knobs)
+    r1 = Env07(seed=1).run(knobs)
+    r2 = Env07(seed=2).run(knobs)
     assert not np.array_equal(r1["detector_0"], r2["detector_0"])
 
 
 def test_same_seed_reproducible():
     knobs = _knobs(knob_2=1000)
-    r1 = Env07SternGerlach(seed=7).run(knobs)
-    r2 = Env07SternGerlach(seed=7).run(knobs)
+    r1 = Env07(seed=7).run(knobs)
+    r2 = Env07(seed=7).run(knobs)
     np.testing.assert_array_equal(r1["detector_0"], r2["detector_0"])
 
 

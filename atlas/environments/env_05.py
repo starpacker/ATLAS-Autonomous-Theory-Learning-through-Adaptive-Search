@@ -1,4 +1,4 @@
-"""ENV-05: Blackbody spectral radiance (Planck distribution)."""
+"""ENV-05 experiment environment."""
 from __future__ import annotations
 
 import numpy as np
@@ -8,24 +8,22 @@ from atlas.environments.normalizer import denormalize
 from atlas.environments.registry import register
 from atlas.types import KnobSpec, KnobType, DetectorSpec
 
-# Physical constants — private, never exposed through interface
-_H = 6.626e-34   # Planck's constant (J·s)
-_C = 2.998e8     # Speed of light (m/s)
-_K_B = 1.381e-23 # Boltzmann constant (J/K)
+# Internal constants — private, never exposed through interface
+_H = 6.626e-34
+_C = 2.998e8
+_K_B = 1.381e-23
 
-_FREQ_MIN = 1e12     # 1 THz
-_FREQ_MAX = 3e15     # 3 PHz
-_TEMP_MIN = 300.0    # K
-_TEMP_MAX = 10000.0  # K
+_FREQ_MIN = 1e12
+_FREQ_MAX = 3e15
+_TEMP_MIN = 300.0
+_TEMP_MAX = 10000.0
 
-# Normalization reference: peak radiance at ~5000K, ~3e14 Hz
-# Compute once at module level to avoid recomputing
-_REF_FREQ = 3.0e14   # Hz (reference for normalization)
-_REF_TEMP = 5000.0   # K (reference temperature)
+_REF_FREQ = 3.0e14
+_REF_TEMP = 5000.0
 
 
-def _planck(freq: float, temp: float) -> float:
-    """Spectral radiance B(f,T) = 2hf^3/c^2 / (exp(hf/kT) - 1)."""
+def _radiation_fn(freq: float, temp: float) -> float:
+    """Internal radiation function."""
     x = _H * freq / (_K_B * temp)
     if x > 500.0:
         return 0.0
@@ -37,13 +35,13 @@ def _planck(freq: float, temp: float) -> float:
 
 
 # Compute reference value for normalization
-_NORM_REF = _planck(_REF_FREQ, _REF_TEMP)
+_NORM_REF = _radiation_fn(_REF_FREQ, _REF_TEMP)
 if _NORM_REF == 0.0:
     _NORM_REF = 1.0  # fallback to avoid division by zero
 
 
 @register
-class Env05Blackbody(BaseEnvironment):
+class Env05(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -64,7 +62,7 @@ class Env05Blackbody(BaseEnvironment):
         freq = denormalize(knobs["knob_0"], _FREQ_MIN, _FREQ_MAX)
         temp = denormalize(knobs["knob_1"], _TEMP_MIN, _TEMP_MAX)
 
-        B = _planck(freq, temp)
+        B = _radiation_fn(freq, temp)
         B_normed = float(B / _NORM_REF)
         # Clip to reasonable positive range; no hard cap at 1 since very high
         # temperatures at low frequencies can exceed the reference

@@ -1,13 +1,13 @@
-"""Tests for ENV-08: classical two-source wave interference."""
+"""Tests for ENV-08."""
 import numpy as np
 import pytest
-from atlas.environments.env_08_water_wave import Env08WaterWave
+from atlas.environments.env_08 import Env08
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env08WaterWave()
+    return Env08()
 
 
 def test_schema_structure(env):

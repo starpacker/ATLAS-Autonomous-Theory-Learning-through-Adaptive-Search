@@ -1,13 +1,13 @@
-"""Tests for ENV-06: Hydrogen emission spectrum via Rydberg formula."""
+"""Tests for ENV-06."""
 import numpy as np
 import pytest
-from atlas.environments.env_06_hydrogen_spectrum import Env06HydrogenSpectrum
+from atlas.environments.env_06 import Env06
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env06HydrogenSpectrum()
+    return Env06()
 
 
 def _knobs(knob_0=0.5, knob_1=1.0):
@@ -63,7 +63,7 @@ def test_output_range(env):
 # --- Discrete spectral lines ---
 
 def test_has_at_least_two_peaks(env):
-    """Hydrogen spectrum should show discrete emission lines."""
+    """Output should show discrete spectral lines."""
     # knob_0=0.2 => center ~420nm, window 320-520nm (Balmer series: 486,434,410,397,389nm)
     result = env.run(_knobs(knob_0=0.2, knob_1=1.0))
     arr = result["detector_0"]
@@ -82,7 +82,7 @@ def test_peaks_are_sharp(env):
 
 
 def test_no_signal_in_empty_window(env):
-    """Spectrometer window far from hydrogen lines should give ~zero output."""
+    """Window far from active lines should give ~zero output."""
     # UV extreme: knob_0=0.0 => 300nm center, window 200-400nm
     # Balmer series lines are at ~410, 434, 486, 656 nm — not in this window
     # Lyman lines are at ~121-122nm — far below

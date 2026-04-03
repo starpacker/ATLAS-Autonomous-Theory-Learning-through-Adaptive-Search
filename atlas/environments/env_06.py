@@ -1,4 +1,4 @@
-"""ENV-06: Hydrogen emission spectrum via Rydberg formula."""
+"""ENV-06 experiment environment."""
 from __future__ import annotations
 
 import numpy as np
@@ -8,12 +8,12 @@ from atlas.environments.normalizer import denormalize
 from atlas.environments.registry import register
 from atlas.types import KnobSpec, KnobType, DetectorSpec
 
-# Physical constants — private, never exposed through interface
-_R_H = 1.097e7  # Rydberg constant (m^-1)
+# Internal constants — private, never exposed through interface
+_R_H = 1.097e7
 
 
 @register
-class Env06HydrogenSpectrum(BaseEnvironment):
+class Env06(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -46,15 +46,12 @@ class Env06HydrogenSpectrum(BaseEnvironment):
         spectrum = np.zeros(500)
         peak_sigma = 1e-9  # 1 nm Gaussian width (sharp lines)
 
-        # Rydberg formula: 1/lambda = R_H * (1/n1^2 - 1/n2^2)
-        # n1 < n2, emission transitions (n2 -> n1)
         for n1 in range(1, n_max):
             for n2 in range(n1 + 1, n_max + 1):
                 inv_lam = _R_H * (1.0 / n1 ** 2 - 1.0 / n2 ** 2)
                 lam_line = 1.0 / inv_lam
                 # Add Gaussian peak if within the detector window
                 if wl_min - 5 * peak_sigma <= lam_line <= wl_max + 5 * peak_sigma:
-                    # Relative intensity: proportional to transition probability
                     rel_intensity = (n2 - n1) / (n2 ** 3 * n1 ** 3)
                     peak = rel_intensity * np.exp(
                         -0.5 * ((wl_axis - lam_line) / peak_sigma) ** 2

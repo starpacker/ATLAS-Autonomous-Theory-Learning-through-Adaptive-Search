@@ -1,4 +1,4 @@
-"""ENV-10: Classical spring (simple harmonic motion)."""
+"""ENV-10 experiment environment."""
 from __future__ import annotations
 
 import math
@@ -10,7 +10,7 @@ from atlas.types import KnobSpec, KnobType, DetectorSpec
 
 
 @register
-class Env10Spring(BaseEnvironment):
+class Env10(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -36,7 +36,6 @@ class Env10Spring(BaseEnvironment):
 
         m = 1.0  # fixed mass = 1 kg
 
-        # SHM: x(t) = A * cos(sqrt(k/m) * t)
         omega = math.sqrt(k / m)
         x = A * math.cos(omega * t)
 

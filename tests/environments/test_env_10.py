@@ -1,13 +1,13 @@
-"""Tests for ENV-10: classical spring (simple harmonic motion)."""
+"""Tests for ENV-10."""
 import math
 import pytest
-from atlas.environments.env_10_spring import Env10Spring
+from atlas.environments.env_10 import Env10
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env10Spring()
+    return Env10()
 
 
 def test_schema_structure(env):

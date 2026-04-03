@@ -51,15 +51,18 @@ def unify_agent_constants(agents: list[AgentConstants],
 
     # Step 2: Deduplicate — keep best R² for each key
     deduped: dict[str, float] = {}
+    deduped_weights: dict[str, float] = {}
     for key, entries in all_constants.items():
         best = max(entries, key=lambda e: e[1])  # highest R²
         deduped[key] = best[0]
+        deduped_weights[key] = best[1]  # carry R² as weight
 
     n_after = len(deduped)
 
     # Step 3: Unify — keep groups with 2+ appearances (PSLQ cross-agent unification)
     # Also include keys that were deduplicated from multiple agents (same key, different agents)
-    all_unified = unify_constants(deduped, tolerance=tolerance)
+    all_unified = unify_constants(deduped, tolerance=tolerance,
+                                  weights=deduped_weights)
     multi_agent_keys = {key for key, entries in all_constants.items() if len(entries) >= 2}
     unified = [
         uc for uc in all_unified

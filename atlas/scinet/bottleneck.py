@@ -62,7 +62,6 @@ def find_optimal_k(
 
         for seed in range(n_seeds):
             torch.manual_seed(seed)
-            np.random.seed(seed)
             model = SciNet(input_dim=input_dim, bottleneck_dim=k, output_dim=output_dim)
             result = train_scinet(model, X, y, config)
             if result.final_loss < best_loss:

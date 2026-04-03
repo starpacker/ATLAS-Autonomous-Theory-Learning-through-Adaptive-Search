@@ -1,13 +1,13 @@
-"""Tests for ENV-09: classical 1D elastic collision."""
+"""Tests for ENV-09."""
 import math
 import pytest
-from atlas.environments.env_09_elastic_collision import Env09ElasticCollision
+from atlas.environments.env_09 import Env09
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env09ElasticCollision()
+    return Env09()
 
 
 def test_schema_structure(env):

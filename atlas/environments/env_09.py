@@ -1,4 +1,4 @@
-"""ENV-09: Classical 1D elastic collision."""
+"""ENV-09 experiment environment."""
 from __future__ import annotations
 
 from atlas.environments.base import BaseEnvironment
@@ -8,7 +8,7 @@ from atlas.types import KnobSpec, KnobType, DetectorSpec
 
 
 @register
-class Env09ElasticCollision(BaseEnvironment):
+class Env09(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -38,7 +38,6 @@ class Env09ElasticCollision(BaseEnvironment):
         m1 = 1.0
         m2 = mass_ratio * m1
 
-        # Elastic collision formulas
         v1_f = ((m1 - m2) * v1_i + 2.0 * m2 * v2_i) / (m1 + m2)
         v2_f = ((m2 - m1) * v2_i + 2.0 * m1 * v1_i) / (m1 + m2)
 

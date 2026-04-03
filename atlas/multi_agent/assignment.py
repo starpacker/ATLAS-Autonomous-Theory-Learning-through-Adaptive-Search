@@ -7,8 +7,6 @@ import numpy as np
 
 
 ALL_ENV_IDS = [f"ENV_{i:02d}" for i in range(1, 13)]
-QUANTUM_ENVS = {f"ENV_{i:02d}" for i in [1, 2, 3, 4, 5, 6, 7]}
-CLASSICAL_ENVS = {f"ENV_{i:02d}" for i in [8, 9, 10, 11, 12]}
 
 
 @dataclass
@@ -32,7 +30,6 @@ def generate_assignment(config: AssignmentConfig) -> list[AgentAssignment]:
     Constraints:
     1. Each agent gets >= min_envs_per_agent experiments
     2. Each experiment is covered by >= min_coverage agents
-    3. Quantum/classical experiments are mixed within each agent
     """
     rng = np.random.default_rng(config.seed)
     n = config.n_agents
@@ -60,20 +57,6 @@ def generate_assignment(config: AssignmentConfig) -> list[AgentAssignment]:
                 break
             chosen = rng.choice(candidates)
             agent_envs[i].append(chosen)
-
-    # Phase 3: Try to ensure quantum/classical mixing
-    for i in range(n):
-        env_set = set(agent_envs[i])
-        has_quantum = bool(env_set & QUANTUM_ENVS)
-        has_classical = bool(env_set & CLASSICAL_ENVS)
-        if not has_classical and len(agent_envs[i]) < n_envs:
-            candidates = [e for e in CLASSICAL_ENVS if e not in env_set]
-            if candidates:
-                agent_envs[i].append(rng.choice(candidates))
-        elif not has_quantum and len(agent_envs[i]) < n_envs:
-            candidates = [e for e in QUANTUM_ENVS if e not in env_set]
-            if candidates:
-                agent_envs[i].append(rng.choice(candidates))
 
     # Sort each agent's experiments for determinism
     for i in range(n):

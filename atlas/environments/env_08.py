@@ -1,4 +1,4 @@
-"""ENV-08: Classical two-source wave interference pattern."""
+"""ENV-08 experiment environment."""
 from __future__ import annotations
 
 import numpy as np
@@ -10,7 +10,7 @@ from atlas.types import KnobSpec, KnobType, DetectorSpec
 
 
 @register
-class Env08WaterWave(BaseEnvironment):
+class Env08(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -37,7 +37,6 @@ class Env08WaterWave(BaseEnvironment):
         # Position array across screen [-5mm, 5mm]
         x = np.linspace(-5e-3, 5e-3, 1000)
 
-        # Classical two-source interference: I(x) = cos^2(pi * d * x / (lambda * L))
         intensity = np.cos(np.pi * d * x / (lam * L)) ** 2
 
         return {"detector_0": intensity}

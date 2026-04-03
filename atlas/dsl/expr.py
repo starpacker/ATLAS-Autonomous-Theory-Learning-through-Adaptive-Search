@@ -11,6 +11,25 @@ from atlas.dsl.operators import Op
 __all__ = ["Expr", "Const", "Var", "BinOp", "UnaryOp", "NAryOp", "Op"]
 
 
+def _const_encoding_cost(value: float) -> float:
+    """Estimate the description length (in bits) of a floating-point constant.
+
+    Small integers and simple fractions are cheap; constants with many
+    significant digits are expensive.  The cost is:
+        1 (node overhead) + log2(1 + significant_digits)
+    where *significant_digits* is the number of decimal digits needed to
+    represent the value (ignoring trailing zeros).
+    """
+    if value == 0.0:
+        return 1.0
+    # Count significant digits from the string representation
+    s = f"{abs(value):.15g}"
+    # Remove leading zeros, decimal point, exponent, and sign
+    mantissa = s.split("e")[0].replace(".", "").lstrip("0").rstrip("0")
+    n_digits = max(len(mantissa), 1)
+    return 1.0 + math.log2(1.0 + n_digits)
+
+
 class Expr:
     """Base class for all expression nodes."""
 
@@ -18,6 +37,10 @@ class Expr:
         raise NotImplementedError
 
     def size(self) -> int:
+        raise NotImplementedError
+
+    def mdl_cost(self) -> float:
+        """Minimum description length accounting for constant encoding cost."""
         raise NotImplementedError
 
     def depth(self) -> int:
@@ -37,6 +60,9 @@ class Const(Expr):
     def size(self) -> int:
         return 1
 
+    def mdl_cost(self) -> float:
+        return _const_encoding_cost(self.value)
+
     def depth(self) -> int:
         return 1
 
@@ -53,6 +79,9 @@ class Var(Expr):
 
     def size(self) -> int:
         return 1
+
+    def mdl_cost(self) -> float:
+        return 1.0
 
     def depth(self) -> int:
         return 1
@@ -79,11 +108,18 @@ class BinOp(Expr):
         if self.op == Op.DIV:
             return l / r if r != 0 else math.nan
         if self.op == Op.POW:
-            return l ** r
+            try:
+                result = l ** r
+            except (ValueError, OverflowError):
+                return math.nan
+            return result if isinstance(result, float) else math.nan
         raise ValueError(f"Unknown binary op: {self.op}")
 
     def size(self) -> int:
         return 1 + self.left.size() + self.right.size()
+
+    def mdl_cost(self) -> float:
+        return 1.0 + self.left.mdl_cost() + self.right.mdl_cost()
 
     def depth(self) -> int:
         return 1 + max(self.left.depth(), self.right.depth())
@@ -113,6 +149,9 @@ class UnaryOp(Expr):
 
     def size(self) -> int:
         return 1 + self.operand.size()
+
+    def mdl_cost(self) -> float:
+        return 1.0 + self.operand.mdl_cost()
 
     def depth(self) -> int:
         return 1 + self.operand.depth()
@@ -144,6 +183,9 @@ class NAryOp(Expr):
 
     def size(self) -> int:
         return 1 + sum(c.size() for c in self.children)
+
+    def mdl_cost(self) -> float:
+        return 1.0 + sum(c.mdl_cost() for c in self.children)
 
     def depth(self) -> int:
         return 1 + max(c.depth() for c in self.children)

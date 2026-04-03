@@ -1,16 +1,16 @@
-"""Tests for ENV-05: Blackbody radiation (Planck distribution)."""
+"""Tests for ENV-05."""
 from __future__ import annotations
 
 import pytest
 import numpy as np
 
-from atlas.environments.env_05_blackbody import Env05Blackbody
+from atlas.environments.env_05 import Env05
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env05Blackbody()
+    return Env05()
 
 
 def test_schema_env_id(env):
@@ -78,7 +78,7 @@ def test_low_frequency_low_radiation(env):
     """At the lowest frequency end (knob_0=0 maps to 1 THz), radiance at low temp is very small.
 
     At 1 THz (infrared/microwave boundary) vs the reference point (~300 THz), the
-    Planck function falls off steeply — radiance should be much less than 1% of the peak.
+    Radiation function falls off steeply — output should be much less than 1% of the peak.
     """
     result_low_freq = env.run({"knob_0": 0.0, "knob_1": 0.5})
     result_peak_freq = env.run({"knob_0": 0.1, "knob_1": 0.5})

@@ -1,4 +1,4 @@
-"""ENV-11: Classical freefall under gravity."""
+"""ENV-11 experiment environment."""
 from __future__ import annotations
 
 from atlas.environments.base import BaseEnvironment
@@ -8,7 +8,7 @@ from atlas.types import KnobSpec, KnobType, DetectorSpec
 
 
 @register
-class Env11Freefall(BaseEnvironment):
+class Env11(BaseEnvironment):
 
     @property
     def env_id(self) -> str:
@@ -32,7 +32,6 @@ class Env11Freefall(BaseEnvironment):
 
         g = 9.81  # m/s^2
 
-        # y(t) = v0*t - 0.5*g*t^2
         y = v0 * t - 0.5 * g * t * t
 
         # Normalize: max height for v0=50 is v0^2/(2g) ≈ 127.4m; use 200m as scale

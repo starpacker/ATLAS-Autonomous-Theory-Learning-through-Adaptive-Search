@@ -1,5 +1,5 @@
 """Tests for formula store."""
-from atlas.sr.formula_store import FormulaStore, StoredFormula, _extract_constants
+from atlas.sr.formula_store import FormulaStore, StoredFormula, extract_constants
 from atlas.dsl.expr import Const, Var, BinOp, UnaryOp
 from atlas.dsl.operators import Op
 from atlas.types import FitMetrics
@@ -66,6 +66,6 @@ def test_pareto_front():
 
 def test_extract_constants():
     expr = BinOp(Op.ADD, BinOp(Op.MUL, Var("x"), Const(3.14)), Const(2.71))
-    constants = _extract_constants(expr)
+    constants = extract_constants(expr)
     assert 3.14 in constants
     assert 2.71 in constants

@@ -1,13 +1,13 @@
-"""Tests for ENV-04: Double-slit interference — wave-particle duality."""
+"""Tests for ENV-04."""
 import numpy as np
 import pytest
-from atlas.environments.env_04_double_slit import Env04DoubleSlit
+from atlas.environments.env_04 import Env04
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env04DoubleSlit(seed=42)
+    return Env04(seed=42)
 
 
 def _knobs(knob_0=0.3, knob_1=0.5, knob_2=0.5, knob_3=1_000_000):
@@ -114,16 +114,16 @@ def test_low_intensity_total_count(env):
 def test_low_intensity_stochastic_different_seeds():
     """Different seeds must give different outputs."""
     knobs = _knobs(knob_3=500)
-    r1 = Env04DoubleSlit(seed=1).run(knobs)
-    r2 = Env04DoubleSlit(seed=2).run(knobs)
+    r1 = Env04(seed=1).run(knobs)
+    r2 = Env04(seed=2).run(knobs)
     assert not np.array_equal(r1["detector_0"], r2["detector_0"])
 
 
 def test_low_intensity_same_seed_reproducible():
     """Same seed must give same output."""
     knobs = _knobs(knob_3=500)
-    r1 = Env04DoubleSlit(seed=99).run(knobs)
-    r2 = Env04DoubleSlit(seed=99).run(knobs)
+    r1 = Env04(seed=99).run(knobs)
+    r2 = Env04(seed=99).run(knobs)
     np.testing.assert_array_equal(r1["detector_0"], r2["detector_0"])
 
 
@@ -144,10 +144,10 @@ def test_statistical_convergence():
 
     accumulated = np.zeros(1000)
     for seed in range(500):
-        result = Env04DoubleSlit(seed=seed).run(knobs_low)
+        result = Env04(seed=seed).run(knobs_low)
         accumulated += result["detector_0"]
 
-    high_result = Env04DoubleSlit(seed=0).run(knobs_high)
+    high_result = Env04(seed=0).run(knobs_high)
     high_pattern = high_result["detector_0"]
 
     # Normalize both for correlation

@@ -10,7 +10,7 @@ def test_default_config():
 
 
 def test_alt_config_changes_output():
-    """With h->2h, photoelectric cutoff should change."""
+    """With h->2h, the threshold cutoff should change."""
     env = get_environment("ENV_01")
     knobs = {"knob_0": 0.7, "knob_1": 0.5, "knob_2": 0, "knob_3": 0.0}
 
@@ -28,7 +28,7 @@ def test_classical_limit():
     with altered_physics(PhysicsConfig(h_multiplier=1e-10)):
         env = get_environment("ENV_01")
         result = env.run({"knob_0": 0.5, "knob_1": 0.5, "knob_2": 0, "knob_3": 0.0})
-    # At h~0, photon energy negligible -> no emission
+    # At h~0, input energy negligible -> no output
     assert result["detector_0"] <= 1e-6
 
 

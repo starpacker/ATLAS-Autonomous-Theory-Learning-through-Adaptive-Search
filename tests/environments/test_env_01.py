@@ -1,16 +1,16 @@
-"""Tests for ENV-01: photoelectric effect."""
+"""Tests for ENV-01."""
 from __future__ import annotations
 
 import pytest
 import numpy as np
 
-from atlas.environments.env_01_photoelectric import Env01Photoelectric
+from atlas.environments.env_01 import Env01
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env01Photoelectric()
+    return Env01()
 
 
 def test_schema_env_id(env):
@@ -75,7 +75,7 @@ def test_frequency_sweep_has_zero_and_nonzero(env):
 
 
 def test_zero_intensity_gives_zero_current(env):
-    """Zero intensity means no incoming photons, so current = 0."""
+    """Zero intensity means zero output."""
     result = env.run({"knob_0": 1.0, "knob_1": 0.0, "knob_2": 0, "knob_3": 0.0})
     assert result["detector_0"] == 0.0
 

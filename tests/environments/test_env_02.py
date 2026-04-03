@@ -1,16 +1,16 @@
-"""Tests for ENV-02: Compton scattering."""
+"""Tests for ENV-02."""
 from __future__ import annotations
 
 import pytest
 import numpy as np
 
-from atlas.environments.env_02_compton import Env02Compton
+from atlas.environments.env_02 import Env02
 from atlas.types import KnobType
 
 
 @pytest.fixture
 def env():
-    return Env02Compton()
+    return Env02()
 
 
 def test_schema_env_id(env):
@@ -101,7 +101,7 @@ def test_output_in_valid_range(env):
 
 
 def test_shift_independent_of_incident_wavelength(env):
-    """Compton shift depends only on angle, not incident wavelength."""
+    """Shift depends only on angle, not incident wavelength."""
     r1 = env.run({"knob_0": 0.1, "knob_1": 0.5})
     r2 = env.run({"knob_0": 0.9, "knob_1": 0.5})
     assert abs(r1["detector_0"] - r2["detector_0"]) < 1e-10, (
