@@ -61,3 +61,18 @@ def test_convert_parenthesized():
 def test_convert_negative_constant():
     expr = pysr_expr_to_atlas("x0 + -3.5", var_names=["knob_0"])
     assert abs(expr.evaluate({"knob_0": 5.0}) - 1.5) < 1e-10
+
+
+def test_sr_config_stability_fields():
+    """New stability fields: timeout, procs, deterministic."""
+    cfg = SRConfig()
+    assert cfg.timeout_in_seconds == 300
+    assert cfg.procs == -1  # -1 = don't pass to PySR
+    assert cfg.deterministic is False
+
+
+def test_sr_config_custom_stability():
+    cfg = SRConfig(timeout_in_seconds=60, procs=1, deterministic=False)
+    assert cfg.timeout_in_seconds == 60
+    assert cfg.procs == 1
+    assert cfg.deterministic is False

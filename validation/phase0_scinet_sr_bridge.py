@@ -62,35 +62,40 @@ def collect_env07_data(n_angle: int = 25, n_gradient: int = 25,
 
 
 def step_4a_find_k(X, y, k_range, epochs, n_seeds):
-    """Train SciNet with various K, select best via AIC.
+    """Train SciNet with various K, select best via validation loss.
 
-    Uses a smaller architecture [64, 32] to avoid AIC parameter penalty
-    dominating for moderate dataset sizes.
+    Uses a smaller architecture [64, 32] to keep model manageable,
+    validation-based K selection (not AIC), and tanh bottleneck activation
+    to bound encoder outputs for SR readability.
     """
     from atlas.scinet.bottleneck import find_optimal_k
     from atlas.scinet.trainer import TrainConfig
 
-    # Smaller architecture: reduces param count so AIC can distinguish K values
-    # Default [128, 64] gives ~42K params; [64, 32] gives ~13K params
     encoder_hidden = [64, 32]
     decoder_hidden = [32, 64]
 
-    # Encoder sparsity encourages interpretable bottleneck representations
-    # so that each z_k depends on few inputs, making SR feasible.
-    config = TrainConfig(epochs=epochs, lr=1e-3, encoder_sparsity=0.01)
+    # No encoder sparsity during K selection (biases toward small K).
+    # Sparsity is applied separately after K is chosen.
+    config = TrainConfig(epochs=epochs, lr=1e-3, encoder_sparsity=0.0,
+                         use_cosine_schedule=True)
 
     logger.info(f"Step 4a: Finding optimal K from {k_range} "
-                f"(epochs={epochs}, seeds={n_seeds}, arch={encoder_hidden})")
+                f"(epochs={epochs}, seeds={n_seeds}, arch={encoder_hidden}, "
+                f"method=val_loss, activation=tanh)")
     t0 = time.time()
     result = find_optimal_k(X, y, k_range=k_range, n_seeds=n_seeds,
                             encoder_hidden=encoder_hidden, decoder_hidden=decoder_hidden,
-                            train_config=config)
+                            train_config=config,
+                            val_fraction=0.2,
+                            selection_method="val_loss",
+                            bottleneck_activation="tanh")
     elapsed = time.time() - t0
 
-    logger.info(f"  AIC scores: {result.aic_scores}")
-    logger.info(f"  Losses:     {result.losses}")
-    logger.info(f"  Best K:     {result.best_k}")
-    logger.info(f"  Time:       {elapsed:.1f}s")
+    logger.info(f"  AIC scores:  {result.aic_scores}")
+    logger.info(f"  Val losses:  {result.val_losses}")
+    logger.info(f"  Train losses:{result.losses}")
+    logger.info(f"  Best K:      {result.best_k} (method={result.selection_method})")
+    logger.info(f"  Time:        {elapsed:.1f}s")
     return result
 
 
@@ -184,8 +189,8 @@ def run_single_seed(seed: int, args):
     logger.info(f"Phase 0 Validation -- Seed {seed}")
     logger.info(f"{'='*60}")
 
-    # Collect data with this seed for stochastic variation
-    X, y = collect_env07_data(n_angle=25, n_gradient=25,
+    # Collect data — 50x50 grid for better K discrimination
+    X, y = collect_env07_data(n_angle=50, n_gradient=50,
                               particle_count=500_000, env_seed=seed)
 
     # Step 4a: Find optimal K

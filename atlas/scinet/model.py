@@ -7,11 +7,13 @@ import torch.nn as nn
 class SciNet(nn.Module):
     def __init__(self, input_dim: int, bottleneck_dim: int, output_dim: int,
                  encoder_hidden: list[int] | None = None,
-                 decoder_hidden: list[int] | None = None):
+                 decoder_hidden: list[int] | None = None,
+                 bottleneck_activation: str = "none"):
         super().__init__()
         self.input_dim = input_dim
         self.bottleneck_dim = bottleneck_dim
         self.output_dim = output_dim
+        self.bottleneck_activation = bottleneck_activation
 
         if encoder_hidden is None:
             encoder_hidden = [128, 64]
@@ -37,7 +39,12 @@ class SciNet(nn.Module):
         self.decoder = nn.Sequential(*dec_layers)
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
-        return self.encoder(x)
+        z = self.encoder(x)
+        if self.bottleneck_activation == "tanh":
+            z = torch.tanh(z)
+        elif self.bottleneck_activation == "sigmoid":
+            z = torch.sigmoid(z)
+        return z
 
     def decode(self, z: torch.Tensor) -> torch.Tensor:
         return self.decoder(z)

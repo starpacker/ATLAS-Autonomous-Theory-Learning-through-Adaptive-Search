@@ -19,7 +19,7 @@ from atlas.analysis.diagnostics import (
 )
 from atlas.analysis.pslq_unifier import unify_constants
 from atlas.dsl.expr import Expr
-from atlas.dsl.serialize import to_str
+from atlas.dsl.serialize import from_str, to_str
 from atlas.types import FitMetrics
 
 # Maximum number of array positions to sample when expanding array outputs.
@@ -105,13 +105,20 @@ def _augment_with_concepts(
     var_names: list[str],
     concepts: dict[str, Expr],
 ) -> tuple[np.ndarray, list[str]]:
-    """Add columns for each DSL concept applied to each input variable.
+    """Add columns for each DSL concept applied to input variables.
 
-    For a concept like ``cos2(v) = cos(v)**2``, and variables [knob_0, knob_1],
-    adds columns ``concept_cos2__knob_0``, ``concept_cos2__knob_1``.
+    **Single-variable concepts** (e.g. ``cos2(v) = cos(v)**2``):
+      Applied to each input variable independently, producing columns like
+      ``concept_cos2__knob_0``, ``concept_cos2__knob_1``.
 
-    Only single-variable concepts are expanded (multi-variable concepts would
-    produce a combinatorial explosion).  The original columns are preserved.
+    **Multi-variable concepts** (e.g. RGDE encoder formulas like
+    ``sin(knob_0) * cos(knob_1)``):
+      Evaluated directly on the matching data columns if all referenced
+      variables exist in *var_names*.  Produces a single column named after
+      the concept.  This is the mechanism through which RGDE-discovered
+      types feed back into subsequent SR search rounds.
+
+    The original columns are always preserved.
 
     Returns (X_augmented, augmented_var_names).
     """
@@ -121,10 +128,11 @@ def _augment_with_concepts(
     extra_cols: list[np.ndarray] = []
     extra_names: list[str] = []
 
+    # Pass 1: Single-variable concepts — apply to each input variable
     for cname, cexpr in concepts.items():
         cvars = cexpr.variables()
         if len(cvars) != 1:
-            continue  # skip multi-variable concepts
+            continue
         cvar = next(iter(cvars))  # the single placeholder variable
 
         for j, vname in enumerate(var_names):
@@ -138,6 +146,27 @@ def _augment_with_concepts(
             if np.all(np.isfinite(col_values)) and np.std(col_values) > 1e-12:
                 extra_cols.append(col_values)
                 extra_names.append(f"{cname}__{vname}")
+
+    # Pass 2: Multi-variable concepts (e.g. RGDE encoder formulas)
+    # Evaluate directly on the actual data columns when all referenced
+    # variables are present in var_names.
+    var_to_idx = {v: i for i, v in enumerate(var_names)}
+    for cname, cexpr in concepts.items():
+        cvars = cexpr.variables()
+        if len(cvars) <= 1:
+            continue  # handled in Pass 1 (or constant — not useful)
+        if not all(cv in var_to_idx for cv in cvars):
+            continue  # variables don't match this experiment's knobs
+        col_values = np.empty(X.shape[0], dtype=float)
+        for i in range(X.shape[0]):
+            try:
+                env_dict = {v: float(X[i, var_to_idx[v]]) for v in cvars}
+                col_values[i] = cexpr.evaluate(env_dict)
+            except Exception:
+                col_values[i] = np.nan
+        if np.all(np.isfinite(col_values)) and np.std(col_values) > 1e-12:
+            extra_cols.append(col_values)
+            extra_names.append(cname)
 
     if not extra_cols:
         return X, var_names
@@ -275,6 +304,43 @@ class ATLASAgent:
 
         return prob_ds if len(prob_ds) > 0 else None
 
+    def _promote_extensions_to_concepts(self) -> int:
+        """Convert RGDE encoder formulas from extensions into DSL concepts.
+
+        When RGDE discovers a new type (e.g. ``State_ENV-07`` with encoder
+        formulas ``z_0 = sin(knob_0) * cos(knob_1)``), those formulas are
+        stored in ``dsl_state.extensions`` as serialized strings.  This method
+        parses them back into Expr objects and registers them as concepts so
+        that ``_augment_with_concepts`` can add them as feature columns in the
+        next SR round.
+
+        This closes the critical feedback loop:
+          RGDE discovers type → encoder formulas become concepts →
+          concepts augment SR features → SR finds better formulas
+
+        Returns the number of new concepts added.
+        """
+        n_added = 0
+        for ext in self.dsl_state.extensions:
+            if ext.get("type") != "new_type":
+                continue
+            defn = ext.get("definition", {})
+            encoding = defn.get("encoding", {})
+            for dim_key, expr_str in encoding.items():
+                concept_name = f"{ext['name']}_z{dim_key}"
+                if concept_name in self.dsl_state.concepts:
+                    continue
+                try:
+                    concept_expr = from_str(expr_str)
+                    self.dsl_state.add_concept(concept_name, concept_expr)
+                    n_added += 1
+                    logger.info("Promoted encoder formula to concept: %s",
+                                concept_name)
+                except Exception as exc:
+                    logger.debug("Failed to parse encoder formula %s: %s",
+                                 concept_name, exc)
+        return n_added
+
     def collect_data(self) -> None:
         """Collect data from all environments."""
         for env_id in self.env_ids:
@@ -305,6 +371,7 @@ class ATLASAgent:
             niterations=self.config.sr_niterations,
             populations=self.config.sr_populations,
             maxsize=self.config.sr_maxsize,
+            timeout_in_seconds=self.config.sr_timeout,
         )
 
         # Step 1: Solve — run SR for each environment
@@ -570,6 +637,17 @@ class ATLASAgent:
                     logger.warning("RGDE unavailable (missing PyTorch or PySR)")
                 except Exception as e:
                     logger.warning(f"RGDE failed for {env_id}: {e}")
+
+        # Step 4.5: Promote encoder formulas → concepts
+        # Convert RGDE encoder formulas into DSL concepts so they appear
+        # as extra feature columns in the NEXT epoch's SR round.  This is
+        # the critical feedback loop: discovered types change the search
+        # space, enabling both same-experiment improvement and cross-
+        # experiment type propagation (when knob names match).
+        if extensions_found:
+            n_promoted = self._promote_extensions_to_concepts()
+            if n_promoted:
+                logger.info("Promoted %d encoder formulas to concepts", n_promoted)
 
         # Step 5: Unify constants
         all_constants: dict[str, float] = {}

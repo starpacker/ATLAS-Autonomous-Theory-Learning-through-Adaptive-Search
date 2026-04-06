@@ -8,11 +8,15 @@ The primary public API:
 """
 from __future__ import annotations
 
+import logging
 import re
+import tempfile
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from atlas.dsl.expr import BinOp, Const, Expr, UnaryOp, Var
 from atlas.dsl.operators import DSL_0, Op
@@ -60,6 +64,9 @@ class SRConfig:
     unary_operators: list[str] = field(
         default_factory=lambda: ["sin", "cos", "exp", "log", "neg"]
     )
+    timeout_in_seconds: int = 300
+    procs: int = -1  # -1 = don't pass to PySR (use its default); 0 = single-process
+    deterministic: bool = False
 
     @classmethod
     def from_dsl(cls, ops: frozenset[Op]) -> "SRConfig":
@@ -148,17 +155,44 @@ def run_sr(
     # PySR uses x0, x1, … internally; we map those back to var_names.
     pysr_var_names = [f"x{i}" for i in range(X.shape[1])]
 
-    model = PySRRegressor(
+    # Use a temporary directory for PySR artifacts to avoid clutter
+    tmpdir = tempfile.mkdtemp(prefix="pysr_")
+
+    # Build PySR kwargs; deterministic mode requires parallelism='serial'
+    pysr_kwargs = dict(
         niterations=config.niterations,
         populations=config.populations,
         maxsize=config.maxsize,
         binary_operators=config.binary_operators,
         unary_operators=config.unary_operators,
         variable_names=pysr_var_names,
+        timeout_in_seconds=config.timeout_in_seconds,
+        tempdir=tmpdir,
     )
-    model.fit(X, y)
+    if config.procs >= 0:
+        pysr_kwargs["procs"] = config.procs
+    if config.deterministic:
+        pysr_kwargs["deterministic"] = True
+        pysr_kwargs["parallelism"] = "serial"
+        pysr_kwargs["random_state"] = 42
+
+    model = PySRRegressor(**pysr_kwargs)
+
+    _empty = SRResult(
+        formulas=[], best_formula=None, best_r_squared=-1.0,
+        best_mdl=float("inf"), converged=False, raw=None,
+    )
+
+    try:
+        model.fit(X, y)
+    except (RuntimeError, OSError, Exception) as exc:
+        logger.warning("PySR crashed during fit: %s", exc)
+        return _empty
 
     equations = model.equations_
+    if equations is None:
+        return _empty
+
     formulas: list[Expr] = []
     best_formula: Optional[Expr] = None
     best_r_squared = -1.0
