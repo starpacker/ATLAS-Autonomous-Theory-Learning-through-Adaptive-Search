@@ -56,3 +56,52 @@ atlas/
 ```
                                                      
 Dependency flow: `environments <- data <- sr <- analysis <- agent <- multi_agent`, with `rgde <- scinet` and `unifier` feeding into `multi_agent`.
+
+## Experiment Data & Results
+
+All experiment outputs go under `experiments/` (git-ignored). Never commit raw experiment data or PySR artifacts.
+
+```
+experiments/
+  phase0/                          # SciNet-SR bridge validation (ENV-07)
+    phase0_results.json            # Aggregate gate results
+    seed_{N}/                      # Per-seed SciNet models + bottleneck vectors
+  phase1/                          # Single-agent classical validation
+    ENV_{ID}/                      # Per-environment results
+      result.json                  # R², formula, diagnostics, timing
+      agent_output.json            # Full agent.run() output
+    phase1_results.json            # Aggregate gate results
+  phase2/                          # Quantum baselines (future)
+  phase3/                          # Multi-agent runs (future)
+```
+
+### Experiment Reports
+
+Each phase directory contains a `REPORT.md` with:
+- Summary table (env, ground truth, R², gate status, formula quality)
+- Per-environment formula analysis (discovered vs true, structure match, constants)
+- Cross-cutting findings and recommended next steps
+- Reports are updated after each experiment run
+
+### Running Experiments
+
+```bash
+# Phase 1 — classical experiments (easy to hard)
+python validation/phase1_classical.py --env ENV_11    # Free fall (~1-2 min)
+python validation/phase1_classical.py --env ENV_12    # Heat conduction (~1-2 min)
+python validation/phase1_classical.py --env ENV_10    # Spring (~3-5 min)
+python validation/phase1_classical.py --env ENV_09    # Elastic collision (~3-5 min)
+python validation/phase1_classical.py --env ENV_08    # Water wave (~10-15 min)
+python validation/phase1_classical.py                 # All 5 sequential
+
+# Phase 0 — SciNet-SR bridge re-validation
+python validation/phase0_scinet_sr_bridge.py --seeds 5 --epochs 500
+```
+
+### Gate Criteria
+
+| Phase | Level | Criteria |
+|-------|-------|---------|
+| Phase 1 | **Minimum** | ENV-11 + ENV-12 R²>0.95, no false D1/D2 |
+| Phase 1 | **Full** | + ENV-10/09 R²>0.95, ENV-08 R²>0.90 |
+| Phase 0 | **Pass** | K>=2 selected in >50% of seeds |

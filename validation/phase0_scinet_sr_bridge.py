@@ -303,8 +303,10 @@ def main():
         logger.info("GATE: FAIL -- modify approach or descope RGDE")
         gate = "FAIL"
 
-    # Save results
-    output_path = Path(__file__).parent / "phase0_results.json"
+    # Save results to experiments/ directory
+    exp_dir = Path(__file__).resolve().parent.parent / "experiments" / "phase0"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    output_path = exp_dir / "phase0_results.json"
     output = {"gate": gate, "success_rate": success_rate, "results": results}
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2, default=str)

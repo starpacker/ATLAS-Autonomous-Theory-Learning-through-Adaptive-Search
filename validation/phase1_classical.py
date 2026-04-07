@@ -179,8 +179,19 @@ def main():
     logger.info(f"  Diagnostics:           {'PASS' if diag_pass else 'FAIL'}")
     logger.info(f"  Full (all 5 envs):     {'PASS' if full_pass else 'FAIL'}")
 
-    # Save results
-    output_path = Path(__file__).parent / "phase1_results.json"
+    # Save results to experiments/ directory
+    exp_dir = Path(__file__).resolve().parent.parent / "experiments" / "phase1"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save per-environment results
+    for r in results:
+        env_dir = exp_dir / r["env_id"]
+        env_dir.mkdir(parents=True, exist_ok=True)
+        with open(env_dir / "result.json", "w") as f:
+            json.dump(r, f, indent=2, default=str)
+
+    # Save aggregate results
+    output_path = exp_dir / "phase1_results.json"
     output = {
         "gate_pass": gate_pass,
         "full_pass": full_pass,
@@ -189,7 +200,7 @@ def main():
     }
     with open(output_path, "w") as f:
         json.dump(output, f, indent=2, default=str)
-    logger.info(f"Results saved to {output_path}")
+    logger.info(f"Results saved to {exp_dir}")
 
     return 0 if gate_pass else 1
 
